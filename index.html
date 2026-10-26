@@ -1,0 +1,935 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>LIFE COLLECTION v4.3</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#3d6b5a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="./icons/icon-192.png">
+<style>
+:root{--bg:#f7f5f0;--card:#fff;--text:#242424;--muted:#777;--accent:#3d6b5a;--line:#e8e3d9}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;background:var(--bg);color:var(--text)}
+.app{max-width:560px;margin:auto;min-height:100vh;padding:24px 16px 92px}
+h1{font-size:25px;margin:4px 0}.sub{color:var(--muted);margin:0 0 22px}.card{background:var(--card);border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 12px #0000000b}
+button,.btn{border:0;border-radius:14px;padding:13px 16px;font-size:16px;background:var(--accent);color:white;font-weight:700}
+.big{width:100%;font-size:18px;padding:17px}.secondary{background:#ece8df;color:#333}.row{display:flex;gap:10px}.row>*{flex:1}
+input,select,textarea{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;font-size:16px;background:white;margin:5px 0 12px}
+label{font-size:13px;color:#666}.preview{width:100%;max-height:240px;object-fit:cover;border-radius:14px;display:none;margin-bottom:12px}
+.item{display:flex;gap:12px;align-items:center;border-top:1px solid var(--line);padding:12px 0}.thumb{width:62px;height:62px;border-radius:12px;object-fit:cover;background:#eee}.grow{flex:1}.small{font-size:12px;color:#777}.score{font-weight:800}
+.nav{position:fixed;bottom:0;left:0;right:0;background:#fffffff5;border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom)}
+.navin{width:min(560px,100%);display:flex}.nav button{flex:1;background:transparent;color:#555;border-radius:0;padding:12px 2px;font-size:12px}.nav button.active{color:var(--accent)}
+.page{display:none}.page.active{display:block}
+canvas{width:100%;height:240px;background:white;border-radius:14px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}.pill{background:#eee9df;padding:9px 12px;border-radius:999px;font-size:14px}
+.empty{text-align:center;color:#888;padding:28px 8px}
+</style><style>
+[data-mode].active{background:#3d6b5a!important;color:white!important;border:3px solid #274d40!important;box-shadow:0 3px 8px rgba(0,0,0,.18)}
+[data-mode]:not(.active){background:#eee9df!important;color:#222!important;border:3px solid transparent!important}
+.curve-axis{display:flex;justify-content:space-between;margin:4px 12px 0;color:#777;font-size:11px}
+</style><style>
+.curve-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
+.curve-scroll-inner{min-width:600px}
+.curve-hint{text-align:center;font-size:12px;color:#777;margin-top:6px}
+</style><style>
+.album-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}
+.album-card{background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.album-card img,.album-placeholder{width:100%;aspect-ratio:1/1;object-fit:cover;background:#eee}
+.album-text{padding:9px}.album-text b{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-filter{display:flex;gap:8px;overflow-x:auto;padding:8px 0}.cat-filter button{white-space:nowrap;padding:9px 14px;border-radius:999px}
+</style><style>
+#hLifeBox{display:none;margin-top:12px}
+#hLifeViewport{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:14px;background:#fff}
+#hLifeTrack{position:relative;width:1800px;height:330px}
+#hLifeSvg{display:block;width:1800px;height:300px}
+#hLifeAxis{position:absolute;left:0;top:300px;width:1800px;height:30px}
+#hLifeAxis span{position:absolute;transform:translateX(-50%);font-size:12px;color:#666}
+#hLifeHint{text-align:center;color:#777;font-size:12px;margin:6px 0}
+</style><style>
+/* 1年表示は従来どおり固定。横スライドは人生全体だけ */
+body:not(.x) #hLifeBox{max-width:100%}
+#chart{max-width:100%;height:auto}
+</style>
+<style>
+#lifeDashboard{margin:14px 0 18px}
+.dashGrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.dashCard{background:#f7f4ee;border-radius:16px;padding:14px;min-height:70px}
+.dashNum{font-size:25px;font-weight:800;line-height:1.1}
+.dashLabel{font-size:12px;color:#777;margin-top:5px}
+.dashBest{margin-top:10px;background:#f7f4ee;border-radius:16px;padding:14px}
+.dashBestRow{display:flex;gap:12px;align-items:center}
+.dashBest img{width:76px;height:76px;object-fit:cover;border-radius:12px}
+.dashRecent{display:flex;gap:8px;overflow-x:auto;margin-top:10px;padding-bottom:4px}
+.dashRecent img{width:82px;height:82px;object-fit:cover;border-radius:12px;flex:none}
+</style></head>
+<body><div class="app">
+<section id="home" class="page active">
+<div id="lifeDashboard">
+ <div class="dashGrid">
+  <div class="dashCard"><div class="dashNum" id="dashTotal">0</div><div class="dashLabel">思い出</div></div>
+  <div class="dashCard"><div class="dashNum" id="dashCats">0</div><div class="dashLabel">カテゴリー</div></div>
+  <div class="dashCard"><div class="dashNum" id="dashYear">0</div><div class="dashLabel">今年の思い出</div></div>
+  <div class="dashCard"><div class="dashNum" id="dashAvg">—</div><div class="dashLabel">今年の平均幸福度</div></div>
+ </div>
+ <div class="dashBest" id="dashBest"></div>
+ <div class="dashBest"><b>最近の思い出</b><div class="dashRecent" id="dashRecent"></div></div>
+</div>
+
+<h1>LIFE COLLECTION</h1><p class="sub">あなたの人生を、写真と気持ちで残そう。</p>
+<button class="big" onclick="show('add')">＋ 今日を残す</button>
+<div class="card"><b>最近の思い出</b><div id="recent"></div></div>
+<div class="card" id="tendencyCard">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+<div><b style="font-size:18px">🔎 私の傾向</b><div class="sub" style="margin-top:4px">記録から見えてくる、あなたの特徴</div></div>
+<button id="tendencyBtn" type="button">見てみる</button></div>
+<div id="tendencyText" style="display:none;margin-top:12px"></div></div><div class="card" id="reflectionPanel"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><div><b style="font-size:20px">思い出を振り返る</b><div class="sub" style="margin-top:4px">昔の写真と思い出に、もう一度出会う</div></div><button type="button" id="reflectBtn" style="width:auto">思い出を見る</button></div><div id="reflectionText" style="display:none;margin-top:14px;line-height:1.8"></div></div><div class="card"><b>いまの記録</b><p id="summary" class="sub" style="margin:10px 0 0"></p></div><p id="storageInfo" style="display:none"></p>
+<div class="card">
+<b style="font-size:18px">📦 データ移行</b>
+<div class="sub" style="margin-top:6px">2.1Bで保存したバックアップから、写真・思い出・カテゴリーを復元します。</div>
+<button id="migImport" type="button" style="margin-top:10px">バックアップを読み込む</button>
+<input id="migFile" type="file" accept=".json,application/json" style="display:none">
+<div id="migStatus" class="sub" style="margin-top:8px"></div>
+</div></section>
+
+<section id="add" class="page">
+<h1>今日を残す</h1><div class="card">
+<label>写真（なくても保存できます）</label><input id="photo" type="file" accept="image/*">
+<div class="small" style="margin:-6px 0 12px">0.9号：写真はIndexedDBという大容量向け保存領域に保存します。過去の日付も自由に登録できます。</div><img id="preview" class="preview">
+<label>タイトル</label><input id="title" placeholder="例：家族で旅行">
+<label>日付</label><input id="date" type="date">
+<label>カテゴリー</label><select id="category">
+<option>家族</option><option>旅行</option><option>仕事</option><option>趣味</option>
+<option>食事</option><option>買い物</option><option>挑戦</option><option>その他</option>
+<option value="__custom">＋ 新しいカテゴリーを作る</option>
+</select>
+<div id="customCategoryBox" style="display:none;margin-top:10px">
+<label>新しいカテゴリー名</label>
+<input id="customCategory" placeholder="例：ゴルフ、植物、釣り">
+</div>
+<label>一言</label><textarea id="note" rows="3" placeholder="その時の気持ちや出来事"></textarea>
+<label>幸福度：<b id="scoreLabel">+3</b></label><input id="scoreInput" type="range" min="-5" max="5" value="3" oninput="scoreLabel.textContent=(this.value>0?'+':'')+this.value">
+<div class="row"><button class="secondary" onclick="show('home')">戻る</button><button onclick="saveEntry()">保存する</button></div>
+</div></section>
+
+<section id="collection" class="page"><h1>コレクション</h1><p class="sub">カテゴリーごとに、人生の思い出を眺めよう。</p>
+<div id="categories" class="pills"></div><div id="categoryFilters" class="cat-filter"></div>
+<div id="albumGrid" class="album-grid"></div></section>
+
+<section id="curve" class="page"><h1>人生曲線</h1><p class="sub">記録した幸福度の変化。●をタップすると思い出が開きます。</p><div class="row" style="margin-bottom:12px"><button data-mode="year" class="active">1年</button><button data-mode="life">人生全体</button></div><canvas id="chart" width="520" height="240"></canvas><div id="curveAxis" class="curve-axis"></div><div id="hLifeBox"><div id="hLifeViewport"><div id="hLifeTrack">
+<svg id="hLifeSvg" viewBox="0 0 1800 300"></svg><div id="hLifeAxis"></div>
+</div></div><div id="hLifeHint">← 指で左右にスライド →　●をタップ</div><div id="hLifeDetail" style="display:none;margin-top:12px;padding:14px;border-radius:16px;background:#f7f4ee"></div></div><div style="text-align:center;color:#777;font-size:12px;margin-top:8px">横スライド機能は安定化後に追加します</div>
+<div class="small" style="text-align:center;margin:8px 0 14px">●をタップすると、その時の思い出を表示</div>
+<div id="curveDetail" class="card" style="display:none"></div><div class="card"><b>平均幸福度</b><div id="avg" style="font-size:32px;font-weight:800;margin-top:8px">—</div></div></section>
+</div>
+<div id="editModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99;padding:22px;overflow:auto"><div style="background:#fff;border-radius:22px;padding:20px;max-width:600px;margin:30px auto"><h2>思い出を編集</h2><input type="hidden" id="editId"><label>タイトル</label><input id="editTitle"><label>日付</label><input id="editDate" type="date"><label>カテゴリー</label><input id="editCategory"><label>一言</label><textarea id="editNote"></textarea><label>幸福度 <b id="editScoreVal">0</b></label><input id="editScore" type="range" min="-5" max="5" value="0"><div style="display:flex;gap:10px;margin-top:18px"><button onclick="saveEdit()">変更を保存</button><button class="secondary" onclick="closeEdit()">キャンセル</button></div><button class="secondary" style="margin-top:12px;width:100%" onclick="deleteFromEdit()">この思い出を削除</button></div></div><nav class="nav"><div class="navin">
+<button data-p="home" class="active" onclick="show('home')">🏠<br>ホーム</button>
+<button data-p="collection" onclick="show('collection')">📚<br>コレクション</button>
+<button data-p="curve" onclick="show('curve')">📈<br>人生曲線</button>
+</div></nav>
+<script>
+let entries=[], photoData='', saving=false, curveMode='year', curvePoints=[], db=null, selectedCurveId=null, selectedCategory='すべて';
+const DB='lifeCollectionDB', STORE='memories';
+
+function openDB(){
+ return new Promise((resolve,reject)=>{
+  let q=indexedDB.open(DB,1);
+  q.onupgradeneeded=()=>{let d=q.result;if(!d.objectStoreNames.contains(STORE))d.createObjectStore(STORE,{keyPath:'id'})};
+  q.onsuccess=()=>{db=q.result;resolve(db)};
+  q.onerror=()=>reject(q.error);
+ });
+}
+function loadAll(){
+ return new Promise((resolve,reject)=>{
+  let q=db.transaction(STORE,'readonly').objectStore(STORE).getAll();
+  q.onsuccess=()=>resolve(q.result||[]); q.onerror=()=>reject(q.error);
+ });
+}
+function putEntry(e){
+ return new Promise((resolve,reject)=>{
+  let q=db.transaction(STORE,'readwrite').objectStore(STORE).put(e);
+  q.onsuccess=()=>resolve();q.onerror=()=>reject(q.error);
+ });
+}
+function deleteEntry(id){
+ return new Promise((resolve,reject)=>{
+  let q=db.transaction(STORE,'readwrite').objectStore(STORE).delete(id);
+  q.onsuccess=()=>resolve();q.onerror=()=>reject(q.error);
+ });
+}
+function setScore(v){scoreInput.value=v;let el=document.getElementById('scoreVal')||document.getElementById('scoreLabel');if(el)el.textContent=(v>0?'+':'')+v}
+function getCustomCats(){try{return JSON.parse(localStorage.getItem('lifeCustomCategories')||'[]')}catch(e){return []}}
+function addCategoryOptions(){let existing=[...category.options].map(o=>o.text);getCustomCats().forEach(k=>{if(!existing.includes(k)){let o=document.createElement('option');o.text=o.value=k;category.insertBefore(o,category.querySelector('option[value="__custom"]'))}})}
+async function init(){
+ date.value=new Date().toISOString().slice(0,10);editScore.oninput=()=>editScoreVal.textContent=(+editScore.value>0?'+':'')+editScore.value;addCategoryOptions();
+category.onchange=()=>{customCategoryBox.style.display=category.value==='__custom'?'block':'none';if(category.value==='__custom')customCategory.focus()};
+ category.onchange=()=>{customCategoryBox.style.display=category.value==='__custom'?'block':'none';};
+ scoreInput.oninput=()=>scoreLabel.textContent=(+scoreInput.value>0?'+':'')+scoreInput.value;
+ try{
+  if(!('indexedDB' in window)) throw new Error('IndexedDB unavailable');
+  await openDB(); entries=await loadAll(); entries.sort((a,b)=>b.id-a.id);
+  storageInfo.textContent='大容量保存モード：利用できます ✓';
+ }catch(e){
+  storageInfo.textContent='この開き方では大容量保存が利用できません。';
+  alert('このスマホの現在の開き方では、大容量保存を利用できません。次はWebアプリとして開く方式に変更します。');
+ }
+ render();
+}
+photo.onchange=e=>{
+ let f=e.target.files[0]; if(!f)return;
+ let r=new FileReader();
+ r.onload=()=>{photoData=r.result;preview.src=photoData;preview.style.display='block'};
+ r.readAsDataURL(f);
+};
+function show(id){document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.p===id));render()}
+async function saveEntry(){
+ if(saving)return;if(!title.value.trim()){alert('タイトルを入れてね');return}
+ if(!db){alert('大容量保存が使えない状態です。');return}
+ saving=true;
+ let chosenCategory=category.value;
+if(chosenCategory==='__custom'){
+ chosenCategory=customCategory.value.trim();
+ if(!chosenCategory){alert('新しいカテゴリー名を入れてね');saving=false;return}
+ let cc=getCustomCats();if(!cc.includes(chosenCategory)){cc.push(chosenCategory);localStorage.setItem('lifeCustomCategories',JSON.stringify(cc));let o=document.createElement('option');o.text=o.value=chosenCategory;category.insertBefore(o,category.querySelector('option[value="__custom"]'))}
+}
+let e={id:Date.now(),title:title.value.trim(),date:date.value,category:chosenCategory,note:note.value.trim(),score:+scoreInput.value,photo:photoData};
+ try{
+  await putEntry(e);entries.unshift(e);
+  title.value='';note.value='';photo.value='';photoData='';preview.style.display='none';show('home');
+ }catch(err){alert('保存できませんでした。');}
+ saving=false;
+}
+async function del(id){if(confirm('この思い出を削除しますか？')){try{await deleteEntry(id);entries=entries.filter(e=>e.id!==id);render()}catch(e){alert('削除できませんでした')}}}
+function item(e){return `<div class="item">${e.photo?`<img class="thumb" src="${e.photo}">`:`<div class="thumb"></div>`}<div class="grow"><b>${esc(e.title)}</b><div class="small">${e.date} ・ ${esc(e.category)}</div>${e.note?`<div class="small">${esc(e.note)}</div>`:''}<button class="secondary" style="padding:5px 8px;font-size:11px;margin-top:5px" onclick="del(${e.id})">削除</button></div><div class="score">${e.score>0?'+':''}${e.score}</div></div>`}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function selectCategory(k){selectedCategory=k;render()}
+function albumCard(e){return `<div class="album-card" onclick="openEdit(${e.id})">${e.photo?`<img src="${e.photo}">`:`<div class="album-placeholder"></div>`}<div class="album-text"><b>${esc(e.title)}</b><div class="small">${e.date}<br>幸福度 ${e.score>0?'+':''}${e.score}</div></div></div>`}
+function openAlbumMemory(id){let e=entries.find(x=>x.id===id);if(!e)return;selectedCurveId=e.id;curveMode='life';show('curve');setTimeout(()=>{draw();curveDetail.innerHTML=(e.photo?'<img src="'+e.photo+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:14px;margin-bottom:10px">':'')+'<b style="font-size:20px">'+esc(e.title)+'</b><div class="small">'+e.date+' ・ '+esc(e.category)+'</div>'+(e.note?'<div style="margin:8px 0">'+esc(e.note)+'</div>':'')+'<div class="score">幸福度 '+(e.score>0?'+':'')+e.score+'</div>';curveDetail.style.display='block'},50)}
+function openEdit(id){let e=entries.find(x=>x.id===id);if(!e)return;editId.value=e.id;editTitle.value=e.title;editDate.value=e.date;editCategory.value=e.category;editNote.value=e.note||'';editScore.value=e.score;editScoreVal.textContent=(e.score>0?'+':'')+e.score;editModal.style.display='block'}function closeEdit(){editModal.style.display='none'}
+async function saveEdit(){let id=+editId.value,e=entries.find(x=>x.id===id);if(!e)return;if(!editTitle.value.trim()){alert('タイトルを入れてね');return}e.title=editTitle.value.trim();e.date=editDate.value;e.category=editCategory.value.trim()||'その他';e.note=editNote.value.trim();e.score=+editScore.value;try{await putEntry(e);closeEdit();render();alert('変更しました')}catch(err){alert('変更を保存できませんでした')}}
+async function deleteFromEdit(){let id=+editId.value;if(!confirm('この思い出を削除しますか？'))return;try{await deleteEntry(id);entries=entries.filter(e=>e.id!==id);closeEdit();render()}catch(err){alert('削除できませんでした')}}
+
+function showHorizontalMemory(e){
+ const d=document.getElementById('hLifeDetail');if(!d)return;
+ const score=(+e.score>0?'+':'')+(e.score??0);
+ const photo=e.photo?'<img src="'+e.photo+'" style="width:100%;max-height:260px;object-fit:cover;border-radius:14px;margin-bottom:10px">':'';
+ d.innerHTML=photo+'<div style="font-weight:700;font-size:18px">'+(e.title||'思い出')+'</div><div style="margin-top:5px;color:#666">'+(e.date||'')+'　'+(e.category||'')+'</div><div style="margin-top:8px">幸福度 <b>'+score+'</b></div>'+(e.note?'<div style="margin-top:8px">'+e.note+'</div>':'');
+ d.style.display='block';
+}
+function drawHorizontalLife(){
+ const box=document.getElementById('hLifeBox'),svg=document.getElementById('hLifeSvg'),axis=document.getElementById('hLifeAxis');
+ if(!box||!svg||!axis)return;
+ const life=(typeof curveMode!=='undefined' && curveMode==='life');
+ box.style.display=life?'block':'none';
+ chart.style.display=life?'none':'block';curveAxis.style.display=life?'none':'';
+ if(!life)return;
+ svg.innerHTML='';axis.innerHTML='';
+ let a=[...entries].filter(e=>e.date).sort((x,y)=>x.date.localeCompare(y.date));if(!a.length)return;
+ const NS='http://www.w3.org/2000/svg',W=1800,L=60,R=40,yy=v=>150-(+v)*22;
+ let d0=new Date(a[0].date+'T00:00:00'),d1=new Date(a[a.length-1].date+'T00:00:00');
+ if(d1<=d0)d1=new Date(d0.getTime()+86400000);
+ const xx=d=>L+(W-L-R)*(new Date(d+'T00:00:00')-d0)/(d1-d0);
+ [-5,0,5].forEach(v=>{let q=document.createElementNS(NS,'line');q.setAttribute('x1',L);q.setAttribute('x2',W-R);q.setAttribute('y1',yy(v));q.setAttribute('y2',yy(v));q.setAttribute('stroke','#ddd');svg.appendChild(q)});
+ let p=document.createElementNS(NS,'polyline');p.setAttribute('points',a.map(e=>xx(e.date)+','+yy(e.score)).join(' '));p.setAttribute('fill','none');p.setAttribute('stroke','#3d6b5a');p.setAttribute('stroke-width','5');p.setAttribute('stroke-linejoin','round');svg.appendChild(p);
+ a.forEach(e=>{let c=document.createElementNS(NS,'circle');c.setAttribute('cx',xx(e.date));c.setAttribute('cy',yy(e.score));c.setAttribute('r',10);c.setAttribute('fill','#3d6b5a');c.onclick=()=>{document.querySelectorAll('#hLifeSvg circle').forEach(z=>z.setAttribute('r',10));c.setAttribute('r',16);showHorizontalMemory(e)};svg.appendChild(c)});
+ let y0=d0.getFullYear(),y1=d1.getFullYear();
+ for(let y=y0;y<=y1;y++){let d=y+'-01-01';let pos=Math.max(L,Math.min(W-R,xx(d)));let sp=document.createElement('span');sp.style.left=pos+'px';sp.textContent=y;axis.appendChild(sp)}
+}
+
+
+function rankRelatedMemories(base,list){
+  if(!base)return (list||[]);
+  function dateOf(x){return new Date((x.date||'1900-01-01')+'T00:00:00')}
+  function words(x){
+    return ((x.title||'')+' '+(x.note||'')+' '+(x.category||''))
+      .toLowerCase().replace(/[、。・,.!?！？「」『』（）()\[\]【】]/g,' ')
+      .split(/\s+/).filter(function(w){return w.length>=2});
+  }
+  var bd=dateOf(base), bm=bd.getMonth(), bday=bd.getDate(), bw=words(base);
+  return (list||[]).filter(function(x){return x!==base}).map(function(x){
+    var d=dateOf(x), score=0, reasons=[];
+    if((x.category||'') && x.category===base.category){score+=50;reasons.push('同じ'+x.category)}
+    var monthDiff=Math.abs(d.getMonth()-bm); monthDiff=Math.min(monthDiff,12-monthDiff);
+    if(monthDiff===0){score+=28;reasons.push('同じ季節')}
+    else if(monthDiff===1){score+=16;reasons.push('近い季節')}
+    var dayDiff=Math.abs(d.getDate()-bday);
+    if(monthDiff===0 && dayDiff<=14){score+=18;reasons.push('同じ頃')}
+    var ww=words(x), common=bw.filter(function(w){return ww.indexOf(w)>=0});
+    if(common.length){score+=Math.min(36,common.length*12);reasons.push('内容が近い')}
+    var yearGap=Math.abs(d.getFullYear()-bd.getFullYear());
+    if(yearGap>0){score+=Math.max(0,12-yearGap*2)}
+    score += Math.max(0,5-Math.abs((Number(x.score)||0)-(Number(base.score)||0)));
+    return {item:x,score:score,reason:reasons.slice(0,2).join('・')||'別の思い出'};
+  }).sort(function(a,b){return b.score-a.score || dateOf(b.item)-dateOf(a.item)});
+}
+
+function buildReflection(){
+  var a=(typeof entries!=='undefined'?entries:[]).slice().filter(function(e){return e&&e.date});
+  var out=document.getElementById('reflectionText');
+  if(!out)return;
+  out.style.display='block';
+  if(!a.length){out.innerHTML='<div style="margin-top:12px">まだ思い出がありません。</div>';return}
+  var now=new Date(), m=now.getMonth();
+  function dt(e){return new Date(e.date+'T00:00:00')}
+  function pic(e){return e.photo||e.image||e.photoData||e.imageData||''}
+  function near(e){var d=dt(e),x=new Date(now.getFullYear(),d.getMonth(),d.getDate());return Math.abs(x-now)/86400000}
+  var old=a.filter(function(e){return dt(e)<now});
+  var themes=[
+    ['🗓️','あの頃の今ごろ',old.filter(function(e){return dt(e).getFullYear()<now.getFullYear()&&near(e)<=35})],
+    ['🍂','昔の'+(m+1)+'月',old.filter(function(e){return dt(e).getMonth()===m&&dt(e).getFullYear()<now.getFullYear()})],
+    ['😊','幸せだった日の記録',a.filter(function(e){return Number(e.score)>=4})],
+    ['🎁','久しぶりの1枚',old.slice().sort(function(x,y){return dt(x)-dt(y)}).slice(0,Math.max(1,Math.ceil(old.length/2)))],
+    ['🎲','今日の思い出',a]
+  ].filter(function(t){return t[2].length});
+  window._lcTheme=((window._lcTheme==null?-1:window._lcTheme)+1)%themes.length;
+  var t=themes[window._lcTheme], list=t[2];
+  window._lcPick=(window._lcPick||0)+1;
+  var e=list[window._lcPick%list.length], d=dt(e), yrs=now.getFullYear()-d.getFullYear(), im=pic(e);
+  var rel=yrs===1?'去年':yrs>1?yrs+'年前':d.getFullYear()+'年';
+  window._lcReflectionPool=list;
+  window._lcReflectionCurrent=e;
+  function relatedCard(x){
+    var xd=dt(x),xy=now.getFullYear()-xd.getFullYear(),p=pic(x);
+    var key=encodeURIComponent(String(x.id==null?'':x.id));
+    return '<button type="button" data-memory-id="'+key+'" style="min-width:125px;width:125px;border:0;background:transparent;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer">'+
+      (p?'<img src="'+p+'" style="width:125px;height:92px;object-fit:cover;border-radius:11px;display:block">':'<div style="width:125px;height:92px;border-radius:11px;background:#eee"></div>')+
+      '<div style="font-size:12px;font-weight:800;margin-top:4px">'+(xy===1?'去年':xy>1?xy+'年前':xd.getFullYear()+'年')+'・'+esc(x.title||'思い出')+'</div></button>';
+  }
+  var ranked=rankRelatedMemories(e,list).slice(0,8);
+  var more=ranked.map(function(r){
+    var x=r.item, xd=dt(x),xy=now.getFullYear()-xd.getFullYear(),p=pic(x);
+    var key=encodeURIComponent(String(x.id==null?'':x.id));
+    return '<button type="button" data-memory-id="'+key+'" style="min-width:125px;width:125px;border:0;background:transparent;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer">'+
+      (p?'<img src="'+p+'" style="width:125px;height:92px;object-fit:cover;border-radius:11px;display:block">':'<div style="width:125px;height:92px;border-radius:11px;background:#eee"></div>')+
+      '<div style="font-size:12px;font-weight:800;margin-top:4px">'+(xy===1?'去年':xy>1?xy+'年前':xd.getFullYear()+'年')+'・'+esc(x.title||'思い出')+'</div>'+
+      '<div style="font-size:10px;color:#777;margin-top:2px">'+esc(r.reason)+'</div></button>';
+  }).join('');
+  out.innerHTML='<div style="margin-top:14px;background:#fff;border-radius:16px;padding:15px">'+
+  '<div style="font-size:13px;color:#777;font-weight:700">今回の振り返り</div>'+
+  '<div style="font-size:23px;font-weight:900;margin-top:3px">'+t[0]+' '+t[1]+'</div>'+
+  '<div style="font-size:15px;font-weight:800;margin-top:8px">'+rel+'の記録</div>'+
+  '<div style="font-size:13px;color:#777;margin-top:3px">'+esc(e.date)+' ・ '+esc(e.category||'その他')+'</div>'+
+  (im?'<img src="'+im+'" style="width:100%;max-height:350px;object-fit:cover;border-radius:14px;margin-top:11px">':'')+
+  '<div style="font-size:22px;font-weight:900;margin-top:10px">'+esc(e.title||'思い出')+'</div>'+
+  '<div style="margin-top:4px">幸福度 <b>'+(Number(e.score)>0?'+':'')+(Number(e.score)||0)+'</b></div>'+
+  (e.note?'<div style="margin-top:8px;line-height:1.6">'+esc(e.note)+'</div>':'')+
+  (more?'<div style="margin-top:16px"><b>🧭 つながりのある思い出</b><div style="display:flex;gap:8px;overflow-x:auto;margin-top:8px">'+more+'</div></div>':'')+
+  '<div style="margin-top:15px;padding:11px;border-radius:12px;background:#f4f1e9;font-size:13px">同じカテゴリー・同じ季節・内容が近い記録を優先しています。写真をタップすると、その思い出へ移動できます。もう一度「思い出を見る」を押すと、違う切り口でも振り返れます。</div></div>';
+  out.querySelectorAll('[data-memory-id]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var id=decodeURIComponent(btn.getAttribute('data-memory-id')||'');
+      var pool=(window._lcReflectionPool||[]);
+      var x=pool.find(function(z){return String(z.id==null?'':z.id)===id});
+      if(x) showReflectionMemory(x,pool,t[0],t[1]);
+    });
+  });
+}
+
+function showReflectionMemory(e,list,icon,label){
+  var out=document.getElementById('reflectionText');
+  if(!out||!e)return;
+  var now=new Date();
+  function dt(x){return new Date(x.date+'T00:00:00')}
+  function pic(x){return x.photo||x.image||x.photoData||x.imageData||''}
+  var d=dt(e),yrs=now.getFullYear()-d.getFullYear(),im=pic(e);
+  var rel=yrs===1?'去年':yrs>1?yrs+'年前':d.getFullYear()+'年';
+  window._lcReflectionCurrent=e;
+  var ranked=rankRelatedMemories(e,list).slice(0,8);
+  var more=ranked.map(function(r){
+    var x=r.item, xd=dt(x),xy=now.getFullYear()-xd.getFullYear(),p=pic(x);
+    var key=encodeURIComponent(String(x.id==null?'':x.id));
+    return '<button type="button" data-memory-id="'+key+'" style="min-width:125px;width:125px;border:0;background:transparent;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer">'+
+      (p?'<img src="'+p+'" style="width:125px;height:92px;object-fit:cover;border-radius:11px;display:block">':'<div style="width:125px;height:92px;border-radius:11px;background:#eee"></div>')+
+      '<div style="font-size:12px;font-weight:800;margin-top:4px">'+(xy===1?'去年':xy>1?xy+'年前':xd.getFullYear()+'年')+'・'+esc(x.title||'思い出')+'</div>'+
+      '<div style="font-size:10px;color:#777;margin-top:2px">'+esc(r.reason)+'</div></button>';
+  }).join('');
+  out.innerHTML='<div style="margin-top:14px;background:#fff;border-radius:16px;padding:15px">'+
+    '<div style="font-size:13px;color:#777;font-weight:700">思い出をたどっています</div>'+
+    '<div style="font-size:23px;font-weight:900;margin-top:3px">'+(icon||'📸')+' '+esc(label||'関連する思い出')+'</div>'+
+    '<div style="font-size:15px;font-weight:800;margin-top:8px">'+rel+'の記録</div>'+
+    '<div style="font-size:13px;color:#777;margin-top:3px">'+esc(e.date)+' ・ '+esc(e.category||'その他')+'</div>'+
+    (im?'<img src="'+im+'" style="width:100%;max-height:350px;object-fit:cover;border-radius:14px;margin-top:11px">':'')+
+    '<div style="font-size:22px;font-weight:900;margin-top:10px">'+esc(e.title||'思い出')+'</div>'+
+    '<div style="margin-top:4px">幸福度 <b>'+(Number(e.score)>0?'+':'')+(Number(e.score)||0)+'</b></div>'+
+    (e.note?'<div style="margin-top:8px;line-height:1.6">'+esc(e.note)+'</div>':'')+
+    (more?'<div style="margin-top:16px"><b>📸 この思い出から、さらにたどる</b><div style="display:flex;gap:8px;overflow-x:auto;margin-top:8px;padding-bottom:5px">'+more+'</div></div>':'')+
+    '<div style="margin-top:15px;padding:11px;border-radius:12px;background:#f4f1e9;font-size:13px">関連度の高い順に表示しています。小さい写真をタップすると、思い出を次々にたどれます。</div></div>';
+  out.querySelectorAll('[data-memory-id]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var id=decodeURIComponent(btn.getAttribute('data-memory-id')||'');
+      var x=(list||[]).find(function(z){return String(z.id==null?'':z.id)===id});
+      if(x) showReflectionMemory(x,list,icon,label);
+    });
+  });
+  out.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function buildTendency(){
+ var out=document.getElementById('tendencyText');if(!out)return;
+ var a=(typeof entries!=='undefined'?entries:[]).filter(function(e){return e&&e.date});
+ out.style.display='block';
+ if(!a.length){out.innerHTML='まだ記録がありません。';return;}
+ var esc=function(v){return String(v||'').replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]})};
+ var g={};a.forEach(function(e){var c=e.category||'その他';(g[c]||(g[c]=[])).push(e)});
+ var st=Object.keys(g).map(function(c){var v=g[c],sum=0;v.forEach(function(e){sum+=Number(e.score)||0});return {c:c,n:v.length,avg:sum/v.length}});
+ var most=st.slice().sort(function(x,y){return y.n-x.n})[0], happy=st.slice().sort(function(x,y){return y.avg-x.avg})[0];
+ var pct=Math.round(most.n/a.length*100), discoveries=[];
+ discoveries.push('記録の約 <b>'+pct+'%</b> が <b>'+esc(most.c)+'</b>。あなたがよく残しているテーマです。');
+ if(happy.c!==most.c){
+   discoveries.push('一方、平均幸福度が最も高いのは <b>'+esc(happy.c)+'</b>（'+happy.n+'件・平均 '+(happy.avg>0?'+':'')+happy.avg.toFixed(1)+'）。<b>よく残すものと、幸福度が高いものは同じとは限らない</b>ようです。');
+ }else discoveries.push('<b>'+esc(most.c)+'</b> は記録数が多く、平均幸福度も最も高いカテゴリーです。');
+
+ var dated=a.slice().sort(function(x,y){return String(x.date).localeCompare(String(y.date))});
+ var latest=new Date(dated[dated.length-1].date+'T00:00:00'), cut=new Date(latest);cut.setFullYear(cut.getFullYear()-1);
+ var recent=dated.filter(function(e){return new Date(e.date+'T00:00:00')>=cut}), older=dated.filter(function(e){return new Date(e.date+'T00:00:00')<cut});
+ function counts(arr){var z={};arr.forEach(function(e){var c=e.category||'その他';z[c]=(z[c]||0)+1});return z}
+ var rc=counts(recent),oc=counts(older), rising=null,bestDiff=0;
+ Object.keys(rc).forEach(function(c){var rp=recent.length?rc[c]/recent.length:0,op=older.length?(oc[c]||0)/older.length:0,d=rp-op;if(d>bestDiff){bestDiff=d;rising=c}});
+ if(rising&&recent.length>=5&&older.length>=5)discoveries.push('最近1年では <b>'+esc(rising)+'</b> の割合が以前より増えています。今のあなたに増えてきたテーマかもしれません。');
+
+ var high=a.filter(function(e){return (Number(e.score)||0)>=4}),hg=counts(high),highTop=Object.keys(hg).sort(function(x,y){return hg[y]-hg[x]})[0];
+ if(highTop)discoveries.push('幸福度 <b>+4以上</b> の思い出では <b>'+esc(highTop)+'</b> が最も多く登場します。');
+
+ var cards=st.slice().sort(function(x,y){return y.n-x.n}).map(function(x){return '<div style="background:#fff;border-radius:12px;padding:10px;min-width:110px"><b>'+esc(x.c)+'</b><div style="font-size:22px;font-weight:800">'+x.n+'<small style="font-size:11px">件</small></div><div style="font-size:11px;color:#777">平均 '+(x.avg>0?'+':'')+x.avg.toFixed(1)+'</div></div>'}).join('');
+ var pics=a.slice().sort(function(x,y){return (Number(y.score)||0)-(Number(x.score)||0)}).filter(function(e){return e.photo||e.image||e.photoData||e.imageData}).slice(0,4).map(function(e){var src=e.photo||e.image||e.photoData||e.imageData;return '<div style="width:calc(50% - 5px)"><img src="'+src+'" style="width:100%;height:105px;object-fit:cover;border-radius:12px"><div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(e.title||'思い出')+'</div></div>'}).join('');
+
+ out.innerHTML=
+ '<div style="background:#fff;border-radius:14px;padding:14px"><div style="font-size:18px;font-weight:800">✨ 記録から見つけたこと</div>'+
+ '<div style="margin-top:10px;line-height:1.8">'+discoveries.map(function(x){return '・'+x}).join('<br>')+'</div>'+
+ '<div style="font-size:11px;color:#777;margin-top:10px">※保存した記録から見える傾向です。件数が増えるほど見え方も変わります。</div></div>'+
+ (function(){
+ var ys={};
+ a.forEach(function(e){var y=String(e.date).slice(0,4);(ys[y]||(ys[y]=[])).push(e)});
+ var years=Object.keys(ys).sort().reverse();
+
+ function prof(arr){
+   var cg={},sum=0;
+   arr.forEach(function(e){var c=e.category||'その他';cg[c]=(cg[c]||0)+1;sum+=Number(e.score)||0});
+   var top=Object.keys(cg).sort(function(x,y){return cg[y]-cg[x]})[0]||'—';
+   return {n:arr.length,avg:arr.length?sum/arr.length:0,top:top,cg:cg};
+ }
+ var allp=prof(a);
+
+ var latest=new Date(Math.max.apply(null,a.map(function(e){return new Date(e.date+'T00:00:00').getTime()})));
+ var cut=new Date(latest); cut.setFullYear(cut.getFullYear()-1);
+ var recent=a.filter(function(e){return new Date(e.date+'T00:00:00')>=cut});
+ var before=a.filter(function(e){return new Date(e.date+'T00:00:00')<cut});
+ var rp=prof(recent),bp=prof(before),rd=rp.avg-bp.avg;
+
+ var cmp='<div style="background:#fff;border-radius:14px;padding:13px;margin-top:9px"><b>📅 直近1年のあなた</b>'+
+ '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px">'+
+ '<div><small>直近1年・'+rp.n+'件</small><br>多い：<b>'+esc(rp.top)+'</b><br>平均：<b>'+(rp.avg>0?'+':'')+rp.avg.toFixed(1)+'</b></div>'+
+ '<div><small>それ以前・'+bp.n+'件</small><br>多い：<b>'+esc(bp.top)+'</b><br>平均：<b>'+(bp.avg>0?'+':'')+bp.avg.toFixed(1)+'</b></div></div>'+
+ '<div style="margin-top:9px;line-height:1.6">直近1年の平均幸福度は、それ以前より <b>'+Math.abs(rd).toFixed(1)+'ポイント'+(rd>.1?'高め':rd<-.1?'低め':'ほぼ同じ')+'</b>です。</div></div>';
+
+ var buttons=years.map(function(y,i){
+   return '<button type="button" class="yearPick" data-year="'+y+'" style="flex:0 0 auto;padding:9px 14px;border-radius:999px;border:0;font-weight:800;'+(i===0?'background:#3f7c67;color:white;':'background:#eee;color:#333;')+'">'+y+'</button>';
+ }).join('');
+
+ var boxId='yearAnalysisBox';
+ setTimeout(function(){
+   var btns=document.querySelectorAll('.yearPick');
+   function showYear(y){
+     btns.forEach(function(b){var on=b.getAttribute('data-year')===y;b.style.background=on?'#3f7c67':'#eee';b.style.color=on?'white':'#333'});
+     var arr=ys[y]||[],p=prof(arr),diff=p.avg-allp.avg;
+     var sorted=arr.slice().sort(function(x,y){return (Number(y.score)||0)-(Number(x.score)||0)});
+     var best=sorted[0];
+     var src=best&&(best.photo||best.image||best.photoData||best.imageData);
+     var share=Math.round((p.n/a.length)*100);
+     var topShare=p.n?Math.round(((p.cg[p.top]||0)/p.n)*100):0;
+     var allTopShare=allp.n?Math.round(((allp.cg[p.top]||0)/allp.n)*100):0;
+     var catText=topShare>allTopShare+8?'全体より <b>'+esc(p.top)+'</b> の割合が高い年でした。':
+                 topShare<allTopShare-8?'普段より <b>'+esc(p.top)+'</b> に偏りすぎない年でした。':
+                 '<b>'+esc(p.top)+'</b> が中心で、全体の傾向に近い年でした。';
+     var cats=Object.keys(p.cg).sort(function(x,y){return p.cg[y]-p.cg[x]});
+     var catCards=cats.map(function(c){return '<div style="min-width:86px;background:#f4f1eb;border-radius:12px;padding:9px 11px"><b>'+esc(c)+'</b><br><span style="font-size:20px;font-weight:900">'+p.cg[c]+'</span>件</div>'}).join('');
+     var mood=diff>.15?'全期間の平均より <b>'+Math.abs(diff).toFixed(1)+'ポイント高め</b>':
+              diff<-.15?'全期間の平均より <b>'+Math.abs(diff).toFixed(1)+'ポイント低め</b>':
+              '全期間の平均と <b>ほぼ同じ</b>';
+     var html='<div style="font-size:21px;font-weight:900">'+y+'年のあなた</div>'+
+       '<div style="font-size:12px;color:#777;margin-top:3px">'+p.n+'件の記録・全記録の約'+share+'%</div>'+
+       '<div style="margin-top:11px;line-height:1.75">'+catText+'<br>平均幸福度は <b>'+(p.avg>0?'+':'')+p.avg.toFixed(1)+'</b>で、'+mood+'でした。</div>'+
+       '<div style="margin-top:13px"><b>📊 この年のカテゴリー</b><div style="display:flex;gap:7px;overflow-x:auto;margin-top:7px;padding-bottom:3px">'+catCards+'</div></div>';
+     if(best){
+       html+='<div style="margin-top:12px"><b>📸 この年を象徴する高幸福度の記録</b><div style="margin-top:5px">'+esc(best.title||'思い出')+'（'+(Number(best.score)>0?'+':'')+(Number(best.score)||0)+'）</div>';
+       if(src) html+='<img src="'+src+'" style="width:100%;height:180px;object-fit:cover;border-radius:13px;margin-top:8px">';
+       html+='</div>';
+     }
+     document.getElementById(boxId).innerHTML=html;
+   }
+   btns.forEach(function(b){b.onclick=function(){showYear(b.getAttribute('data-year'))}});
+   if(years.length)showYear(years[0]);
+ },50);
+
+ return '<div style="margin-top:16px"><b>🗓️ 時間で見る私</b>'+cmp+
+ '<div style="margin-top:16px;font-size:18px;font-weight:800">年を選んで振り返る</div>'+
+ '<div style="font-size:12px;color:#777;margin-top:4px">その年の自分を、あなたの全記録と比べます。</div>'+
+ '<div style="display:flex;gap:7px;overflow-x:auto;margin-top:9px;padding-bottom:4px">'+buttons+'</div>'+
+ '<div id="'+boxId+'" style="background:#fff;border-radius:16px;padding:15px;margin-top:10px"></div></div>';
+})()+'<div style="margin-top:14px"><b>📊 カテゴリー別</b><div style="display:flex;gap:8px;overflow-x:auto;margin-top:8px">'+cards+'</div></div>'+
+ (pics?'<div style="margin-top:14px"><b>😊 幸福度の高い思い出</b><div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px">'+pics+'</div></div>':'');
+}
+setTimeout(function(){var b=document.getElementById('tendencyBtn');if(b)b.addEventListener('click',buildTendency)},300);
+
+
+function migrateBackup(file){
+ var st=document.getElementById('migStatus');
+ if(st)st.textContent='バックアップを読み込んでいます…（写真が多いと少し時間がかかります）';
+ var fr=new FileReader();
+ fr.onerror=function(){if(st)st.textContent='ファイルを読み込めませんでした。'};
+ fr.onload=function(){
+  try{
+   var d=JSON.parse(fr.result),items=Array.isArray(d)?d:d.memories;
+   if(!Array.isArray(items))throw new Error('人生コレクションのバックアップではありません');
+   if(st)st.textContent=items.length+'件を確認。復元しています…';
+   var q=indexedDB.open('lifeCollectionDB');
+   q.onerror=function(){if(st)st.textContent='保存領域を開けませんでした。'};
+   q.onsuccess=function(){
+    var db=q.result,tx=db.transaction('memories','readwrite'),os=tx.objectStore('memories');
+    items.forEach(function(x){os.put(x)});
+    tx.oncomplete=function(){
+     if(d.customCategories)localStorage.setItem('lifeCustomCategories',JSON.stringify(d.customCategories));
+     if(st)st.textContent=items.length+'件の移行が完了しました。画面を更新します。';
+     setTimeout(function(){location.reload()},1000);
+    };
+    tx.onerror=function(){if(st)st.textContent='復元中にエラーが発生しました。'};
+   };
+  }catch(e){if(st)st.textContent='バックアップファイルを確認してください。';}
+ };
+ fr.readAsText(file);
+}
+setTimeout(function(){
+ var b=document.getElementById('migImport'),f=document.getElementById('migFile');
+ if(b&&f)b.onclick=function(){f.click()};
+ if(f)f.onchange=function(){if(f.files&&f.files[0])migrateBackup(f.files[0])};
+},300);
+
+function renderDashboard(){
+ const total=document.getElementById('dashTotal'); if(!total)return;
+ const a=[...entries].filter(Boolean);
+ const nowY=new Date().getFullYear();
+ const thisYear=a.filter(e=>String(e.date||'').slice(0,4)==String(nowY));
+ const cats=new Set(a.map(e=>e.category).filter(Boolean));
+ total.textContent=a.length;
+ document.getElementById('dashCats').textContent=cats.size;
+ document.getElementById('dashYear').textContent=thisYear.length;
+ const avg=thisYear.length?thisYear.reduce((n,e)=>n+(+e.score||0),0)/thisYear.length:null;
+ document.getElementById('dashAvg').textContent=avg===null?'—':((avg>0?'+':'')+avg.toFixed(1));
+ const best=document.getElementById('dashBest');
+ if(a.length){
+   const b=[...a].sort((x,y)=>(+y.score||0)-(+x.score||0) || String(y.date||'').localeCompare(String(x.date||'')))[0];
+   const pic=b.photo?'<img src="'+b.photo+'">':'';
+   best.innerHTML='<b>幸福度が高かった思い出</b><div class="dashBestRow" style="margin-top:10px">'+pic+
+    '<div><strong>'+escapeHtmlLife(b.title||'思い出')+'</strong><div style="font-size:13px;color:#777;margin-top:4px">'+
+    escapeHtmlLife(b.date||'')+'　幸福度 '+((+b.score>0?'+':'')+(b.score??0))+'</div></div></div>';
+ }else best.innerHTML='<b>幸福度が高かった思い出</b><div style="color:#777;margin-top:8px">思い出を登録するとここに表示されます</div>';
+ const recent=document.getElementById('dashRecent');recent.innerHTML='';
+ [...a].sort((x,y)=>String(y.date||'').localeCompare(String(x.date||''))).slice(0,8).forEach(e=>{
+   if(!e.photo)return;
+   const im=document.createElement('img');im.src=e.photo;im.alt=e.title||'思い出';
+   im.onclick=()=>{ if(typeof openEdit==='function')openEdit(e.id); };
+   recent.appendChild(im);
+ });
+ if(!recent.children.length)recent.innerHTML='<span style="color:#777;font-size:13px">写真付きの思い出がここに並びます</span>';
+}
+function render(){
+ recent.innerHTML=entries.length?entries.slice(0,5).map(item).join(''):'<div class="empty">まだ記録がありません。<br>最初の思い出を残してみよう。</div>';
+ summary.textContent=`思い出 ${entries.length}件 ・ カテゴリー ${new Set(entries.map(e=>e.category)).size}種類`;
+ let counts={};entries.forEach(e=>counts[e.category]=(counts[e.category]||0)+1);
+ categories.innerHTML=Object.entries(counts).map(([k,v])=>`<span class="pill">${esc(k)} ${v}</span>`).join('')||'<span class="small">まだありません</span>';
+ let cats=['すべて',...Object.keys(counts)];
+ categoryFilters.innerHTML=cats.map(k=>`<button class="secondary" style="${selectedCategory===k?'background:#3d6b5a;color:#fff':''}" onclick="selectCategory('${k}')">${esc(k)}${k==='すべて'?'':' '+counts[k]}</button>`).join('');
+ let filtered=selectedCategory==='すべて'?entries:entries.filter(e=>e.category===selectedCategory);
+ albumGrid.innerHTML=filtered.length?filtered.map(albumCard).join(''):'<div class="empty">このカテゴリーにはまだ記録がありません。</div>';
+ draw();drawHorizontalLife();
+ try{renderDashboard()}catch(e){}
+}
+function draw(){
+ let c=chart,ctx=c.getContext('2d'),w=c.width,h=c.height;
+ ctx.clearRect(0,0,w,h);curvePoints=[];
+ ctx.font='16px sans-serif';ctx.textAlign='right';ctx.textBaseline='middle';
+ [-5,-2.5,0,2.5,5].forEach((v,i)=>{
+   let yy=220-i*50;ctx.strokeStyle='#ddd';ctx.lineWidth=1;
+   ctx.beginPath();ctx.moveTo(42,yy);ctx.lineTo(w-10,yy);ctx.stroke();
+   ctx.fillStyle='#777';ctx.fillText(v>0?'+'+v:String(v),36,yy);
+ });
+ if(!entries.length){avg.textContent='—';curveAxis.innerHTML='';return}
+ let all=[...entries].sort((a,b)=>a.date.localeCompare(b.date));
+ let d=curveMode==='year'?all.filter(e=>String(e.date).startsWith(String(new Date().getFullYear()))):all;
+ if(!d.length){avg.textContent='—';curveAxis.innerHTML='<span>この期間の記録はありません</span>';return}
+ let dates=d.map(e=>new Date(e.date+'T00:00:00').getTime()), t0=Math.min(...dates),t1=Math.max(...dates);
+ let x=i=>48+(w-65)*(t1===t0?.5:(dates[i]-t0)/(t1-t0)), y=sc=>120-sc*20;
+ let fmt=v=>{let q=v.split('-');return curveMode==='year'?`${+q[1]}/${+q[2]}`:q[0]};
+ curveAxis.innerHTML=d.length===1?`<span>${fmt(d[0].date)}</span>`:`<span>${fmt(d[0].date)}</span><span>${fmt(d[d.length-1].date)}</span>`;
+ ctx.strokeStyle='#3d6b5a';ctx.lineWidth=4;ctx.beginPath();
+ d.forEach((e,i)=>i?ctx.lineTo(x(i),y(e.score)):ctx.moveTo(x(i),y(e.score)));ctx.stroke();
+ d.forEach((e,i)=>{
+   let xx=x(i),yy=y(e.score),sel=e.id===selectedCurveId;
+   curvePoints.push({x:xx,y:yy,e});
+   ctx.fillStyle='#3d6b5a';ctx.beginPath();ctx.arc(xx,yy,sel?14:9,0,Math.PI*2);ctx.fill();
+   if(sel){
+     ctx.textAlign='center';ctx.textBaseline='bottom';ctx.font='bold 14px sans-serif';ctx.fillStyle='#222';
+     let label=e.title.length>10?e.title.slice(0,10)+'…':e.title;
+     ctx.fillText(label,xx,Math.max(17,yy-18));
+   }
+ });
+ let av=d.reduce((z,e)=>z+e.score,0)/d.length;avg.textContent=(av>0?'+':'')+av.toFixed(1);
+}
+chart.addEventListener('click',function(ev){let r=chart.getBoundingClientRect(),x=(ev.clientX-r.left)*chart.width/r.width,y=(ev.clientY-r.top)*chart.height/r.height;let p=curvePoints.map(q=>({q:q,d:Math.hypot(q.x-x,q.y-y)})).sort((a,b)=>a.d-b.d)[0];if(!p||p.d>40)return;let e=p.q.e;selectedCurveId=e.id;draw();curveDetail.innerHTML=(e.photo?'<img src="'+e.photo+'" style="width:100%;max-height:220px;object-fit:cover;border-radius:14px;margin-bottom:10px">':'')+'<b style="font-size:20px">'+esc(e.title)+'</b><div class="small">'+e.date+' ・ '+esc(e.category)+'</div>'+(e.note?'<div style="margin:8px 0">'+esc(e.note)+'</div>':'')+'<div class="score">幸福度 '+(e.score>0?'+':'')+e.score+'</div>';curveDetail.style.display='block'});
+document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>show(b.dataset.p));
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{curveMode=b.dataset.mode;selectedCurveId=null;document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));curveDetail.style.display='none';draw()});
+init();
+
+function syncLifeCurveView(){try{drawHorizontalLife()}catch(e){}}
+document.addEventListener('DOMContentLoaded',()=>{
+ setTimeout(syncLifeCurveView,150);
+ setTimeout(syncLifeCurveView,500);
+ document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>setTimeout(syncLifeCurveView,0)));
+ document.querySelectorAll('.nav button, nav button').forEach(b=>b.addEventListener('click',()=>setTimeout(syncLifeCurveView,0)));
+});
+setTimeout(()=>{try{renderDashboard()}catch(e){}},500);
+setTimeout(()=>{try{renderDashboard()}catch(e){}},1000);
+
+setTimeout(function(){
+ var b=document.getElementById('reflectBtn');
+ if(b&&!b.dataset.reflectBound){
+   b.dataset.reflectBound='1';
+   b.addEventListener('click',function(){buildReflection();});
+ }
+},700);
+</script>
+<style>
+#lcBackupCard{margin:18px 24px 105px;background:#fff;border-radius:18px;padding:18px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+#lcBackupCard h2{margin:0 0 5px;font-size:21px}
+#lcBackupCard p{margin:4px 0 13px;color:#777;line-height:1.45}
+.lcBackupBtns{display:flex;gap:9px;flex-wrap:wrap}
+.lcBackupBtn{border:0;border-radius:12px;padding:12px 16px;font-size:15px;font-weight:800;cursor:pointer}
+#lcBackupSave{background:#3f7d69;color:#fff}
+#lcBackupRestore{background:#eee;color:#222}
+#lcBackupStatus{font-size:13px;margin-top:11px;color:#666;line-height:1.5}
+</style>
+<section id="lcBackupCard">
+  <h2>🛟 データを守る</h2>
+  <p>写真と思い出をバックアップできます。大きなバックアップも、スマホのメモリを使いすぎない方式で復元します。</p>
+  <div class="lcBackupBtns">
+    <button id="lcBackupSave" class="lcBackupBtn" type="button">バックアップを作る</button>
+    <button id="lcBackupRestore" class="lcBackupBtn" type="button">バックアップから復元</button>
+  </div>
+  <input id="lcBackupFile" type="file" accept=".json,.jsonl,.lcbackup,application/json,text/plain" style="display:none">
+  <div id="lcBackupStatus">※今までの3.3/3.4バックアップも読み込めます。新しいバックアップは大容量復元に強い形式です。</div>
+  <div id="lcRestorePreview" style="display:none;margin-top:14px;padding:14px;background:#f5f2e9;border-radius:14px;line-height:1.7">
+    <div style="font-weight:900;font-size:17px">🔎 バックアップを確認しました</div>
+    <div id="lcRestoreSummary" style="margin-top:7px"></div>
+    <div id="lcRestoreHealth" style="margin-top:7px;font-weight:800;color:#3f7d69"></div>
+    <button id="lcRestoreTest" class="lcBackupBtn" type="button" style="display:none">復元テスト（変更しない）</button>
+    <button id="lcRestoreGo" class="lcBackupBtn" type="button" style="display:none;margin-top:12px;background:#3f7d69;color:#fff">安全に復元する</button>
+    <button id="lcRestoreCancel" class="lcBackupBtn" type="button" style="display:none;margin-top:12px;background:#e8e8e8;color:#222">やめる</button>
+    <div style="font-size:12px;color:#777;margin-top:9px">復元前に、現在のデータも自動でバックアップします。現在の記録を勝手に消しません。</div>
+  </div>
+</section>
+
+<script>
+(function(){
+  var DB='lifeCollectionDB', STORE='memories', META_KEY='lifeCustomCategories';
+  var status=document.getElementById('lcBackupStatus'), pending=null;
+  var preview=document.getElementById('lcRestorePreview'), summary=document.getElementById('lcRestoreSummary'), health=document.getElementById('lcRestoreHealth');
+  var test=document.getElementById('lcRestoreTest'), go=document.getElementById('lcRestoreGo'), cancel=document.getElementById('lcRestoreCancel'), file=document.getElementById('lcBackupFile');
+
+  function openDb(){return new Promise(function(resolve,reject){var r=indexedDB.open(DB);r.onsuccess=function(){resolve(r.result)};r.onerror=function(){reject(r.error)}})}
+  function getAll(){return openDb().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction(STORE,'readonly'),r=tx.objectStore(STORE).getAll();r.onsuccess=function(){resolve(r.result||[])};r.onerror=function(){reject(r.error)}})})}
+  function customCats(){try{return JSON.parse(localStorage.getItem(META_KEY)||'[]')}catch(e){return []}}
+  function cats(items){return new Set((items||[]).map(function(x){return x.category}).filter(Boolean)).size}
+  function photos(items){return (items||[]).filter(function(x){return !!(x.photo||x.image||x.imageData||x.photoData)}).length}
+  function stamp(){var d=new Date(),p=function(n){return String(n).padStart(2,'0')};return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())}
+
+  // v3.5: 1行ずつ保存する形式。復元時に巨大なJSON全体を一度にメモリへ載せない。
+  function downloadStreamBackup(items,categories,prefix){
+    var parts=[];
+    parts.push(JSON.stringify({app:'LIFE COLLECTION',version:'3.5-stream',format:'jsonl',createdAt:new Date().toISOString(),customCategories:categories||[]})+'\n');
+    (items||[]).forEach(function(x){parts.push(JSON.stringify({type:'memory',data:x})+'\n')});
+    parts.push(JSON.stringify({type:'end',count:(items||[]).length})+'\n');
+    var blob=new Blob(parts,{type:'text/plain'});
+    var a=document.createElement('a');
+    var u=URL.createObjectURL(blob);
+    a.href=u;a.download=(prefix||'life_collection_backup_')+stamp()+'.lcbackup';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(u)},3000);
+  }
+
+  async function scanStreamBackup(f){
+    var reader=f.stream().pipeThrough(new TextDecoderStream()).getReader(), buf='', first=true, header=null, n=0, ph=0, cs=new Set();
+    while(true){
+      var z=await reader.read(); if(z.done)break; buf+=z.value;
+      var lines=buf.split('\n'); buf=lines.pop();
+      for(var i=0;i<lines.length;i++){
+        var line=lines[i].trim(); if(!line)continue;
+        var o=JSON.parse(line);
+        if(first){first=false; if(!o||o.app!=='LIFE COLLECTION'||o.format!=='jsonl')throw new Error('not-stream'); header=o; continue}
+        if(o.type==='memory'&&o.data){n++; if(o.data.category)cs.add(o.data.category); if(o.data.photo||o.data.image||o.data.imageData||o.data.photoData)ph++}
+      }
+    }
+    if(buf.trim()){var o=JSON.parse(buf); if(first){if(!o||o.app!=='LIFE COLLECTION'||o.format!=='jsonl')throw new Error('not-stream');header=o}else if(o.type==='memory'&&o.data){n++;if(o.data.category)cs.add(o.data.category);if(o.data.photo||o.data.image||o.data.imageData||o.data.photoData)ph++}}
+    return {kind:'stream',file:f,header:header,count:n,categories:cs.size,photos:ph};
+  }
+
+  function scanLegacyBackup(f){
+    return new Promise(function(resolve,reject){
+      var rd=new FileReader();
+      rd.onload=function(){try{
+        var data=JSON.parse(rd.result);
+        if(!data||data.app!=='LIFE COLLECTION'||!Array.isArray(data.memories))throw new Error('invalid');
+        resolve({kind:'legacy',data:data,count:data.memories.length,categories:cats(data.memories),photos:photos(data.memories)});
+      }catch(e){reject(e)}};
+      rd.onerror=function(){reject(rd.error)}; rd.readAsText(f);
+    });
+  }
+
+  async function inspectBackup(f){
+    // v3.7: 大容量バックアップは全体を読み込まず、先頭と末尾だけで即確認する。
+    // 186MB級でもファイル選択後に画面へすぐ戻れるようにする。
+    var head=await f.slice(0,4096).text();
+    var firstLine=(head.split('\n')[0]||'').trim();
+    try{
+      var h=JSON.parse(firstLine);
+      if(h&&h.app==='LIFE COLLECTION'&&h.format==='jsonl'){
+        var tailSize=Math.min(f.size,8192);
+        var tail=await f.slice(f.size-tailSize,f.size).text();
+        var matches=[...tail.matchAll(/\{"type":"end","count":(\d+)\}/g)];
+        var count=matches.length?Number(matches[matches.length-1][1]):null;
+        if(count===null||!Number.isFinite(count))throw new Error('end-marker-missing');
+        var cc=Array.isArray(h.customCategories)?h.customCategories.length:0;
+        return {kind:'stream',file:f,header:h,count:count,categories:cc,photos:null,quickChecked:true};
+      }
+    }catch(e){
+      // LIFE COLLECTIONのstream形式らしいのに末尾が壊れている場合は旧形式扱いにしない。
+      try{var hh=JSON.parse(firstLine);if(hh&&hh.app==='LIFE COLLECTION'&&hh.format==='jsonl')throw e}catch(_e){if(_e===e)throw e}
+    }
+    return await scanLegacyBackup(f);
+  }
+
+  function clearStore(){return openDb().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).clear();tx.oncomplete=resolve;tx.onerror=function(){reject(tx.error)}})})}
+  function putOne(db,x){return new Promise(function(resolve,reject){var tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(x);tx.oncomplete=resolve;tx.onerror=function(){reject(tx.error)}})}
+
+  async function restoreStream(p){
+    await clearStore();
+    var db=await openDb(), reader=p.file.stream().pipeThrough(new TextDecoderStream()).getReader(), buf='', first=true, done=0;
+    while(true){
+      var z=await reader.read(); if(z.done)break; buf+=z.value;
+      var lines=buf.split('\n'); buf=lines.pop();
+      for(var i=0;i<lines.length;i++){
+        var line=lines[i].trim(); if(!line)continue;
+        var o=JSON.parse(line);
+        if(first){first=false;continue}
+        if(o.type==='memory'&&o.data){await putOne(db,o.data);done++;status.textContent='復元しています… '+done+' / '+p.count+'件';}
+      }
+    }
+    if(buf.trim()){var o=JSON.parse(buf);if(!first&&o.type==='memory'&&o.data){await putOne(db,o.data);done++}}
+    if(p.header&&Array.isArray(p.header.customCategories))localStorage.setItem(META_KEY,JSON.stringify(p.header.customCategories));
+    return done;
+  }
+
+  function restoreLegacy(p){
+    return openDb().then(function(db){return new Promise(function(resolve,reject){
+      var tx=db.transaction(STORE,'readwrite'),st=tx.objectStore(STORE);st.clear();
+      (p.data.memories||[]).forEach(function(x){st.put(x)});
+      tx.oncomplete=function(){if(Array.isArray(p.data.customCategories))localStorage.setItem(META_KEY,JSON.stringify(p.data.customCategories));resolve(p.data.memories.length)};
+      tx.onerror=function(){reject(tx.error)}
+    })});
+  }
+
+  document.getElementById('lcBackupSave').addEventListener('click',function(){
+    status.textContent='バックアップを作成しています…';
+    getAll().then(function(items){
+      downloadStreamBackup(items,customCats(),'life_collection_backup_');
+      status.textContent='✅ '+items.length+'件をバックアップしました。新しい大容量対応形式です。';
+    }).catch(function(){status.textContent='⚠️ バックアップに失敗しました。もう一度試してください。'});
+  });
+
+  document.getElementById('lcBackupRestore').addEventListener('click',function(){file.click()});
+
+  file.addEventListener('change',async function(ev){
+    var f=ev.target.files&&ev.target.files[0]; if(!f)return;
+    pending={kind:'stream',file:f,count:null,categories:null,photos:null};
+    preview.style.display='block';
+    test.style.display='none';
+    go.style.display='none';
+    cancel.style.display='inline-block';
+    summary.innerHTML='選択したバックアップ：<b>'+Math.round(f.size/1024/1024)+'MB</b><br>これから1件ずつ安全に確認します。';
+    health.textContent='⏳ 読み取りを開始しています…';
+    health.style.color='#3f7d69';
+    status.textContent='バックアップを1件ずつ確認しています…';
+    // 同じファイルをもう一度選べるよう、選択直後にinputだけリセット
+    ev.target.value='';
+    try{
+      // 画面を先に描画してから大容量ファイルを読み始める
+      await new Promise(function(resolve){requestAnimationFrame(function(){setTimeout(resolve,60)})});
+      var r=await testStreamOneByOne(pending);
+      pending.count=r.count;
+      pending.categories=r.categories;
+      pending.photos=r.photos;
+      pending.header=r.header;
+      summary.innerHTML='思い出：<b>'+r.count+'件</b><br>カテゴリー：<b>'+r.categories+'種類</b><br>写真：<b>'+r.photos+'枚</b><br>ファイル：<b>'+Math.round(pending.file.size/1024/1024)+'MB</b>';
+      health.innerHTML='✅ バックアップを最後まで確認できました。<br>現在のデータはまだ変更していません。';
+      health.style.color='#3f7d69';
+      status.textContent='✅ '+r.count+'件を確認しました。「安全に復元する」を押すと復元できます。';
+      go.style.display='inline-block';
+    }catch(e){
+      health.innerHTML='⚠️ バックアップの確認を完了できませんでした。<br>現在のデータは変更していません。';
+      health.style.color='#b44';
+      status.textContent='読み取り中にエラーが出ました。別のバックアップでも試せます。';
+      go.style.display='none';
+    }
+  });
+
+
+  async function testStreamOneByOne(p){
+    var reader=p.file.stream().pipeThrough(new TextDecoderStream()).getReader();
+    var buf='', first=true, done=0, ph=0, cs=new Set(), header=null;
+    while(true){
+      var z=await reader.read();
+      if(z.done)break;
+      buf+=z.value;
+      var lines=buf.split('\n');
+      buf=lines.pop();
+      for(var i=0;i<lines.length;i++){
+        var line=lines[i].trim();
+        if(!line)continue;
+        var o=JSON.parse(line);
+        if(first){
+          first=false;
+          if(!o||o.app!=='LIFE COLLECTION'||o.format!=='jsonl')throw new Error('invalid-header');
+          header=o;
+          continue;
+        }
+        if(o.type==='memory'&&o.data){
+          done++;
+          if(o.data.category)cs.add(o.data.category);
+          if(o.data.photo||o.data.image||o.data.imageData||o.data.photoData)ph++;
+          status.textContent='バックアップ確認中… '+done+'件 読み取り済み';
+          // 1件を確認したら参照を手放し、次へ進む
+          o=null;
+          await new Promise(function(resolve){setTimeout(resolve,0)});
+        }
+      }
+    }
+    if(buf.trim()){
+      var last=JSON.parse(buf);
+      if(first){
+        if(!last||last.app!=='LIFE COLLECTION'||last.format!=='jsonl')throw new Error('invalid-header');
+        header=last;
+      }else if(last.type==='memory'&&last.data){
+        done++;
+        if(last.data.category)cs.add(last.data.category);
+        if(last.data.photo||last.data.image||last.data.imageData||last.data.photoData)ph++;
+      }
+    }
+    if(p.count!=null && done!==p.count)throw new Error('count-mismatch');
+    return {count:done,categories:cs.size,photos:ph,header:header};
+  }
+
+  test.addEventListener('click',async function(){
+    if(!pending)return;
+    test.disabled=true; go.disabled=true; cancel.disabled=true;
+    try{
+      if(pending.kind!=='stream'){
+        health.textContent='旧形式バックアップは従来方式で確認します。';
+        status.textContent='旧形式バックアップを確認済みです。';
+        return;
+      }
+      status.textContent='1件ずつ復元テストを開始します… 現在のデータは変更しません。';
+      var r=await testStreamOneByOne(pending);
+      pending.count=r.count; pending.categories=r.categories; pending.photos=r.photos; pending.header=r.header;
+      summary.innerHTML='思い出：<b>'+r.count+'件</b><br>カテゴリー：<b>'+r.categories+'種類</b><br>写真：<b>'+r.photos+'枚</b><br>ファイル：<b>'+Math.round(pending.file.size/1024/1024)+'MB</b>';
+      go.style.display='inline-block';
+      var lines=[];
+      lines.push('✅ 1件ずつの復元テスト成功');
+      lines.push('思い出：'+r.count+'件 ✓');
+      lines.push('カテゴリー：'+r.categories+'種類');
+      lines.push('写真：'+r.photos+'枚');
+      lines.push('ファイル：'+Math.round(pending.file.size/1024/1024)+'MB');
+      lines.push('40件をまとめて読み込まず、1件ずつ最後まで確認しました。');
+      lines.push('現在の写真・思い出は変更していません。');
+      health.innerHTML=lines.join('<br>');
+      health.style.color='#3f7d69';
+      status.textContent='✅ 復元テスト完了。1件ずつ最後まで読み取れました。';
+    }catch(e){
+      health.textContent='⚠️ '+(pending&&pending.count?pending.count+'件の':'')+'復元テストを完了できませんでした。現在のデータは変更していません。';
+      health.style.color='#b44';
+      status.textContent='復元テストでエラーが出ました。';
+    }finally{
+      test.disabled=false; go.disabled=false; cancel.disabled=false;
+    }
+  });
+
+cancel.addEventListener('click',function(){pending=null;preview.style.display='none';status.textContent='復元をキャンセルしました。現在のデータはそのままです。'});
+
+  go.addEventListener('click',async function(){
+    if(!pending)return;go.disabled=true;cancel.disabled=true;
+    try{
+      status.textContent='現在の40件などを先に安全バックアップしています…';
+      var current=await getAll();
+      downloadStreamBackup(current,customCats(),'life_collection_before_restore_');
+      status.textContent='自動バックアップ完了。復元を開始します…';
+      var n=pending.kind==='stream'?await restoreStream(pending):await restoreLegacy(pending);
+      status.textContent='✅ '+n+'件を復元しました。画面を更新します…';
+      setTimeout(function(){location.reload()},1200);
+    }catch(e){
+      go.disabled=false;cancel.disabled=false;
+      status.textContent='⚠️ 復元を完了できませんでした。復元前バックアップは残っています。';
+    }
+  });
+})();
+</script>
+
+
+<section id="lcLiteCard" style="margin:16px 24px 22px;background:#fff;border-radius:18px;padding:18px;box-shadow:0 1px 4px #0001">
+<h2 style="margin:0 0 8px;font-size:21px">📝 軽量バックアップ</h2>
+<p style="color:#666;line-height:1.6">写真を除く、タイトル・日付・カテゴリー・一言・幸福度を小さなファイルに保存します。元の写真はそのまま残します。</p>
+<div style="display:flex;gap:8px;flex-wrap:wrap"><button id="lcLiteSave" type="button">軽量バックアップを作る</button><button id="lcLiteLoad" class="secondary" type="button">軽量バックアップから復元</button></div>
+<input id="lcLiteFile" type="file" accept=".json,application/json" style="display:none">
+<div id="lcLiteStatus" style="margin-top:12px;font-size:14px;line-height:1.6;color:#555">既存の記録や写真を消さずに復元します。</div>
+<div id="lcLitePreview" style="display:none;background:#f5f2e9;border-radius:12px;padding:12px;margin-top:12px"><div id="lcLiteDetails"></div><button id="lcLiteConfirm" type="button" style="margin-top:12px">確認して復元する</button><button id="lcLiteCancel" type="button" class="secondary" style="margin-top:12px">やめる</button></div>
+</section>
+<script>
+(function(){
+ const dbName='lifeCollectionDB',store='memories',key='lifeCustomCategories';
+ const $=id=>document.getElementById(id),status=$('lcLiteStatus');let pending=null;
+ function database(){return new Promise((resolve,reject)=>{let r=indexedDB.open(dbName,1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(store))r.result.createObjectStore(store,{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
+ async function all(){let db=await database();return new Promise((resolve,reject)=>{let t=db.transaction(store,'readonly'),r=t.objectStore(store).getAll();r.onsuccess=()=>{db.close();resolve(r.result)};r.onerror=()=>{db.close();reject(r.error)}})}
+ function download(obj){let blob=new Blob([JSON.stringify(obj)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='life_collection_light_'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000)}
+ $('lcLiteSave').onclick=async()=>{try{status.textContent='軽量バックアップを作成中…';let items=await all();let memories=items.map(x=>({id:x.id,title:x.title||'',date:x.date||'',category:x.category||'その他',note:x.note||'',score:Number(x.score)||0}));let categories=[];try{categories=JSON.parse(localStorage.getItem(key)||'[]')}catch(e){}download({app:'LIFE COLLECTION',format:'light-v1',createdAt:new Date().toISOString(),customCategories:categories,memories});status.textContent='✅ '+memories.length+'件の軽量バックアップを作りました。写真は含まれません。'}catch(e){status.textContent='⚠️ 作成できませんでした：'+e.message}};
+ $('lcLiteLoad').onclick=()=>$('lcLiteFile').click();
+ $('lcLiteFile').onchange=async ev=>{let f=ev.target.files&&ev.target.files[0];ev.target.value='';if(!f)return;pending=null;$('lcLitePreview').style.display='none';try{if(f.size>15*1024*1024)throw Error('軽量バックアップとしては大きすぎます。写真入りのバックアップは選ばないでください。');let d=JSON.parse(await f.text());if(d.app!=='LIFE COLLECTION'||d.format!=='light-v1'||!Array.isArray(d.memories))throw Error('軽量バックアップではありません');if(d.memories.some(x=>!x||!Number.isFinite(Number(x.id))||typeof x.title!=='string'||typeof x.date!=='string'||typeof x.category!=='string'||typeof x.note!=='string'||!Number.isFinite(Number(x.score))||x.photo||x.image))throw Error('データ形式を確認できません');let ids=new Set();for(let x of d.memories){if(ids.has(x.id))throw Error('重複IDがあります');ids.add(x.id)}let current=await all(),old=new Set(current.map(x=>String(x.id))),newCount=d.memories.filter(x=>!old.has(String(x.id))).length;pending=d;$('lcLiteDetails').textContent='軽量バックアップ：'+d.memories.length+'件 ／ 新しい記録：'+newCount+'件 ／ 既存の記録：'+(d.memories.length-newCount)+'件。既存の写真は保持します。';$('lcLitePreview').style.display='block';status.textContent='内容を確認しました。まだデータは変更していません。'}catch(e){status.textContent='⚠️ '+e.message}};
+ $('lcLiteCancel').onclick=()=>{pending=null;$('lcLitePreview').style.display='none';status.textContent='キャンセルしました。記録は変更していません。'};
+ $('lcLiteConfirm').onclick=async()=>{if(!pending)return;let btn=$('lcLiteConfirm');btn.disabled=true;try{let db=await database(),d=pending;let n=0;for(let x of d.memories){await new Promise((resolve,reject)=>{let tx=db.transaction(store,'readwrite'),os=tx.objectStore(store),g=os.get(x.id);g.onsuccess=()=>{let prev=g.result||{};os.put({...prev,...x,photo:prev.photo||prev.image||prev.photoData||prev.imageData||''})};tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});n++;if(n%10===0)status.textContent='復元中… '+n+' / '+d.memories.length+'件'}db.close();let existing=[];try{existing=JSON.parse(localStorage.getItem(key)||'[]')}catch(e){}let cats=[...new Set([...existing,...(Array.isArray(d.customCategories)?d.customCategories:[])])];localStorage.setItem(key,JSON.stringify(cats));status.textContent='✅ '+n+'件の記録を復元しました。既存の写真は保持しました。画面を更新します。';$('lcLitePreview').style.display='none';pending=null;setTimeout(()=>location.reload(),1200)}catch(e){status.textContent='⚠️ 途中で停止しました：'+e.message+'。既存の写真は削除していません。'}finally{btn.disabled=false}};
+})();
+</script>
+
+<section style="margin:16px 24px 110px;background:white;border-radius:18px;padding:18px;box-shadow:0 1px 4px #0001" id="lcPhotoCard">
+<h2 style="margin:0 0 8px">📷 写真バックアップ（5枚ずつ）</h2>
+<p style="color:#666;line-height:1.6">写真を5枚ずつ別ファイルに保存します。軽量バックアップと両方を保管してください。復元では既存の写真を上書きしません。</p>
+<div id="lcPhotoProgress" style="margin:12px 0">準備中…</div>
+<button id="lcPhotoExport" type="button">次の5枚を保存</button>
+<button id="lcPhotoImport" type="button" class="secondary">写真ファイルを読み込む</button>
+<input id="lcPhotoFiles" type="file" accept=".json,application/json" multiple style="display:none">
+<div id="lcPhotoStatus" style="margin-top:12px;line-height:1.6;color:#555"></div>
+</section>
+<script>
+(function(){
+const $=id=>document.getElementById(id),status=$('lcPhotoStatus'),progress=$('lcPhotoProgress');
+let offset=0, photos=[];const batchSize=5;
+function dbOpen(){return new Promise((ok,no)=>{let r=indexedDB.open('lifeCollectionDB',1);r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}
+async function load(){let db=await dbOpen();return new Promise((ok,no)=>{let t=db.transaction('memories','readonly'),r=t.objectStore('memories').getAll();r.onsuccess=()=>{db.close();ok(r.result)};r.onerror=()=>{db.close();no(r.error)}})}
+async function refresh(){let a=await load();photos=a.filter(x=>typeof x.photo==='string'&&x.photo.length>0).sort((a,b)=>String(a.id).localeCompare(String(b.id)));progress.textContent='写真 '+photos.length+'枚 ／ 保存位置 '+Math.min(offset,photos.length)+'枚';$('lcPhotoExport').textContent=offset>=photos.length?'最初から保存し直す':'次の'+Math.min(batchSize,photos.length-offset)+'枚を保存'}
+function download(data,from,to){let blob=new Blob([JSON.stringify({app:'LIFE COLLECTION',format:'photo-batch-v1',photos:data})],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='life_collection_photos_'+String(from).padStart(3,'0')+'-'+String(to).padStart(3,'0')+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000)}
+$('lcPhotoExport').onclick=async()=>{try{if(offset>=photos.length)offset=0;await refresh();let chunk=photos.slice(offset,offset+batchSize).map(x=>({id:x.id,photo:x.photo}));if(!chunk.length){status.textContent='保存する写真がありません';return}download(chunk,offset+1,offset+chunk.length);offset+=chunk.length;status.textContent='✅ '+offset+' / '+photos.length+'枚まで保存しました。ダウンロードしたファイルを消さずに保管してください。';await refresh()}catch(e){status.textContent='⚠️ '+e.message}};
+$('lcPhotoImport').onclick=()=>$('lcPhotoFiles').click();
+$('lcPhotoFiles').onchange=async ev=>{let fs=Array.from(ev.target.files||[]);ev.target.value='';if(!fs.length)return;let done=0,kept=0,missing=0;status.textContent='読み込み中…';try{for(let f of fs){let d=JSON.parse(await f.text());if(d.app!=='LIFE COLLECTION'||d.format!=='photo-batch-v1'||!Array.isArray(d.photos)||d.photos.length>5)throw Error(f.name+' は対応する写真ファイルではありません');for(let x of d.photos){if(!x||!Number.isFinite(Number(x.id))||typeof x.photo!=='string'||!x.photo.startsWith('data:image/'))throw Error('写真の形式が不正です');let db=await dbOpen();let result=await new Promise((ok,no)=>{let t=db.transaction('memories','readwrite'),o=t.objectStore('memories'),g=o.get(x.id),out='';g.onsuccess=()=>{let old=g.result;if(!old){out='missing';return}if(old.photo){out='kept';return}o.put({...old,photo:x.photo});out='done'};t.oncomplete=()=>ok(out);t.onerror=()=>no(t.error)});db.close();if(result==='done')done++;else if(result==='kept')kept++;else missing++;status.textContent='読み込み中… '+(done+kept+missing)+'枚確認';await new Promise(r=>setTimeout(r,0))}}status.textContent='✅ 写真を追加 '+done+'枚／既存写真を保持 '+kept+'枚／対応記録なし '+missing+'枚。画面を更新すると反映されます。';await refresh()}catch(e){status.textContent='⚠️ 読み込みを停止：'+e.message+'。処理済みの写真は保持されています。'}};
+refresh().catch(e=>status.textContent='⚠️ '+e.message);
+})();
+</script>
+<script>
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(e => console.warn("Offline setup unavailable",e)));
+}
+</script>
+</body></html>
