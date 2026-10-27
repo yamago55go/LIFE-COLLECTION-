@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>LIFE COLLECTION v4.3</title>
+<title>LIFE COLLECTION v4.4</title>
 <link rel="manifest" href="./manifest.webmanifest">
 <meta name="theme-color" content="#3d6b5a">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -609,13 +609,13 @@ setTimeout(function(){
 </style>
 <section id="lcBackupCard">
   <h2>🛟 データを守る</h2>
-  <p>写真と思い出をバックアップできます。大きなバックアップも、スマホのメモリを使いすぎない方式で復元します。</p>
+  <p>写真・思い出・カテゴリーを1つのファイルに保存。復元時は既存の記録を守りながら、不足分だけ追加します。</p>
   <div class="lcBackupBtns">
     <button id="lcBackupSave" class="lcBackupBtn" type="button">バックアップを作る</button>
     <button id="lcBackupRestore" class="lcBackupBtn" type="button">バックアップから復元</button>
   </div>
   <input id="lcBackupFile" type="file" accept=".json,.jsonl,.lcbackup,application/json,text/plain" style="display:none">
-  <div id="lcBackupStatus">※今までの3.3/3.4バックアップも読み込めます。新しいバックアップは大容量復元に強い形式です。</div>
+  <div id="lcBackupStatus">※保存後はダウンロードしたファイルをGoogle Drive等にも保管してください。</div>
   <div id="lcRestorePreview" style="display:none;margin-top:14px;padding:14px;background:#f5f2e9;border-radius:14px;line-height:1.7">
     <div style="font-weight:900;font-size:17px">🔎 バックアップを確認しました</div>
     <div id="lcRestoreSummary" style="margin-top:7px"></div>
@@ -623,7 +623,7 @@ setTimeout(function(){
     <button id="lcRestoreTest" class="lcBackupBtn" type="button" style="display:none">復元テスト（変更しない）</button>
     <button id="lcRestoreGo" class="lcBackupBtn" type="button" style="display:none;margin-top:12px;background:#3f7d69;color:#fff">安全に復元する</button>
     <button id="lcRestoreCancel" class="lcBackupBtn" type="button" style="display:none;margin-top:12px;background:#e8e8e8;color:#222">やめる</button>
-    <div style="font-size:12px;color:#777;margin-top:9px">復元前に、現在のデータも自動でバックアップします。現在の記録を勝手に消しません。</div>
+    <div style="font-size:12px;color:#777;margin-top:9px">復元前に現在のデータのバックアップをダウンロードします。既存記録は削除・上書きせず、足りない記録と写真だけ追加します。</div>
   </div>
 </section>
 
@@ -706,34 +706,51 @@ setTimeout(function(){
     return await scanLegacyBackup(f);
   }
 
-  function clearStore(){return openDb().then(function(db){return new Promise(function(resolve,reject){var tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).clear();tx.oncomplete=resolve;tx.onerror=function(){reject(tx.error)}})})}
   function putOne(db,x){return new Promise(function(resolve,reject){var tx=db.transaction(STORE,'readwrite');tx.objectStore(STORE).put(x);tx.oncomplete=resolve;tx.onerror=function(){reject(tx.error)}})}
 
+  // v4.4: 非破壊の復元。既存IDを上書きせず、足りない写真だけ補完する。
+  function mergeOne(db,x){return new Promise(function(resolve,reject){
+    var tx=db.transaction(STORE,'readwrite'),st=tx.objectStore(STORE),g=st.get(x.id),action='';
+    g.onsuccess=function(){
+      var old=g.result;
+      if(!old){st.put(x);action='added';return}
+      var photo=old.photo||old.image||old.photoData||old.imageData;
+      var incoming=x.photo||x.image||x.photoData||x.imageData;
+      if(!photo&&incoming){st.put(Object.assign({},old,{photo:incoming}));action='photo'}
+      else action='kept';
+    };
+    tx.oncomplete=function(){resolve(action)};tx.onerror=function(){reject(tx.error)};
+    tx.onabort=function(){reject(tx.error||new Error('transaction aborted'))};
+  })}
   async function restoreStream(p){
-    await clearStore();
-    var db=await openDb(), reader=p.file.stream().pipeThrough(new TextDecoderStream()).getReader(), buf='', first=true, done=0;
-    while(true){
-      var z=await reader.read(); if(z.done)break; buf+=z.value;
-      var lines=buf.split('\n'); buf=lines.pop();
-      for(var i=0;i<lines.length;i++){
-        var line=lines[i].trim(); if(!line)continue;
-        var o=JSON.parse(line);
-        if(first){first=false;continue}
-        if(o.type==='memory'&&o.data){await putOne(db,o.data);done++;status.textContent='復元しています… '+done+' / '+p.count+'件';}
-      }
+    var db=await openDb(),reader=p.file.stream().pipeThrough(new TextDecoderStream()).getReader(),buf='',first=true,done=0,end=null,stats={added:0,photo:0,kept:0};
+    async function lineRead(line){
+      if(!line.trim())return;
+      var o=JSON.parse(line);
+      if(first){first=false;if(!o||o.app!=='LIFE COLLECTION'||o.format!=='jsonl')throw Error('invalid header');return}
+      if(o.type==='end'){end=o.count;return}
+      if(o.type==='memory'){
+        if(end!==null||!o.data||!Number.isFinite(Number(o.data.id)))throw Error('invalid memory');
+        var action=await mergeOne(db,o.data);stats[action]++;done++;
+        status.textContent='復元しています… '+done+' / '+p.count+'件';
+      }else throw Error('unknown record');
     }
-    if(buf.trim()){var o=JSON.parse(buf);if(!first&&o.type==='memory'&&o.data){await putOne(db,o.data);done++}}
-    if(p.header&&Array.isArray(p.header.customCategories))localStorage.setItem(META_KEY,JSON.stringify(p.header.customCategories));
-    return done;
+    try{
+      while(true){var z=await reader.read();if(z.done)break;buf+=z.value;var lines=buf.split('\n');buf=lines.pop();for(var line of lines)await lineRead(line)}
+      if(buf.trim())await lineRead(buf);
+      if(end===null||end!==done||done!==p.count)throw Error('count mismatch');
+      if(p.header&&Array.isArray(p.header.customCategories)){
+        var all=[...new Set(customCats().concat(p.header.customCategories))];localStorage.setItem(META_KEY,JSON.stringify(all));
+      }
+      return {done:done,stats:stats};
+    }finally{db.close();reader.releaseLock()}
   }
-
-  function restoreLegacy(p){
-    return openDb().then(function(db){return new Promise(function(resolve,reject){
-      var tx=db.transaction(STORE,'readwrite'),st=tx.objectStore(STORE);st.clear();
-      (p.data.memories||[]).forEach(function(x){st.put(x)});
-      tx.oncomplete=function(){if(Array.isArray(p.data.customCategories))localStorage.setItem(META_KEY,JSON.stringify(p.data.customCategories));resolve(p.data.memories.length)};
-      tx.onerror=function(){reject(tx.error)}
-    })});
+  async function restoreLegacy(p){
+    var db=await openDb(),stats={added:0,photo:0,kept:0};
+    try{for(var x of p.data.memories){var action=await mergeOne(db,x);stats[action]++}
+      if(Array.isArray(p.data.customCategories))localStorage.setItem(META_KEY,JSON.stringify([...new Set(customCats().concat(p.data.customCategories))]));
+      return {done:p.data.memories.length,stats:stats};
+    }finally{db.close()}
   }
 
   document.getElementById('lcBackupSave').addEventListener('click',function(){
@@ -783,7 +800,7 @@ setTimeout(function(){
 
   async function testStreamOneByOne(p){
     var reader=p.file.stream().pipeThrough(new TextDecoderStream()).getReader();
-    var buf='', first=true, done=0, ph=0, cs=new Set(), header=null;
+    var buf='', first=true, done=0, ph=0, cs=new Set(), header=null, end=null, ids=new Set();
     while(true){
       var z=await reader.read();
       if(z.done)break;
@@ -800,8 +817,10 @@ setTimeout(function(){
           header=o;
           continue;
         }
+        if(o.type==='end'){end=o.count;continue}
         if(o.type==='memory'&&o.data){
-          done++;
+          if(end!==null||!Number.isFinite(Number(o.data.id))||ids.has(String(o.data.id)))throw Error('invalid or duplicate ID');
+          ids.add(String(o.data.id));done++;
           if(o.data.category)cs.add(o.data.category);
           if(o.data.photo||o.data.image||o.data.imageData||o.data.photoData)ph++;
           status.textContent='バックアップ確認中… '+done+'件 読み取り済み';
@@ -822,6 +841,7 @@ setTimeout(function(){
         if(last.data.photo||last.data.image||last.data.imageData||last.data.photoData)ph++;
       }
     }
+    if(end===null||end!==done)throw new Error('end-count-mismatch');
     if(p.count!=null && done!==p.count)throw new Error('count-mismatch');
     return {count:done,categories:cs.size,photos:ph,header:header};
   }
@@ -865,22 +885,23 @@ cancel.addEventListener('click',function(){pending=null;preview.style.display='n
   go.addEventListener('click',async function(){
     if(!pending)return;go.disabled=true;cancel.disabled=true;
     try{
-      status.textContent='現在の40件などを先に安全バックアップしています…';
+      status.textContent='現在の記録をバックアップしています…';
       var current=await getAll();
-      downloadStreamBackup(current,customCats(),'life_collection_before_restore_');
-      status.textContent='自動バックアップ完了。復元を開始します…';
-      var n=pending.kind==='stream'?await restoreStream(pending):await restoreLegacy(pending);
-      status.textContent='✅ '+n+'件を復元しました。画面を更新します…';
+      if(current.length)downloadStreamBackup(current,customCats(),'life_collection_before_restore_');
+      status.textContent='復元を開始します。既存の記録は削除・上書きしません…';
+      var result=pending.kind==='stream'?await restoreStream(pending):await restoreLegacy(pending);
+      status.textContent='✅ '+result.done+'件確認：新規'+result.stats.added+'件、写真補完'+result.stats.photo+'件、既存保持'+result.stats.kept+'件。画面を更新します…';
       setTimeout(function(){location.reload()},1200);
     }catch(e){
       go.disabled=false;cancel.disabled=false;
-      status.textContent='⚠️ 復元を完了できませんでした。復元前バックアップは残っています。';
+      status.textContent='⚠️ 復元を完了できませんでした。既存記録は消していませんが、一部の新規記録が追加された可能性があります。';
     }
   });
 })();
 </script>
 
 
+<details style="margin:12px 16px 100px"><summary style="padding:12px;color:#666">以前の分割バックアップを使う（詳細）</summary>
 <section id="lcLiteCard" style="margin:16px 24px 22px;background:#fff;border-radius:18px;padding:18px;box-shadow:0 1px 4px #0001">
 <h2 style="margin:0 0 8px;font-size:21px">📝 軽量バックアップ</h2>
 <p style="color:#666;line-height:1.6">写真を除く、タイトル・日付・カテゴリー・一言・幸福度を小さなファイルに保存します。元の写真はそのまま残します。</p>
@@ -927,6 +948,7 @@ $('lcPhotoFiles').onchange=async ev=>{let fs=Array.from(ev.target.files||[]);ev.
 refresh().catch(e=>status.textContent='⚠️ '+e.message);
 })();
 </script>
+</details>
 <script>
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(e => console.warn("Offline setup unavailable",e)));
